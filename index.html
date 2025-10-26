@@ -2,39 +2,207 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Ağ Güvenlik Testi</title>
+    <title>ARP Zehirlenmesi Eğitimi</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Roboto Mono', monospace;
             background-color: #1a1a1a;
-            color: #00ff00;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 20px;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
             flex-direction: column;
+            align-items: center;
         }
+
         .container {
-            border: 2px solid #00ff00;
-            padding: 40px;
-            box-shadow: 0 0 20px #00ff00;
+            max-width: 800px;
+            width: 100%;
         }
-        h1 {
-            font-size: 3em;
+
+        .header {
+            background-color: #ff4d4d;
+            color: #1a1a1a;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border: 2px solid #ff6666;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
             text-transform: uppercase;
+            letter-spacing: 3px;
         }
-        p {
+        
+        .header p {
+            margin: 5px 0 0;
+            font-size: 1.2em;
+        }
+
+        details {
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #444;
+            transition: background-color 0.3s;
+        }
+
+        details[open] {
+            background-color: #333;
+        }
+
+        summary {
+            font-weight: 700;
+            font-size: 1.4em;
+            padding: 20px;
+            cursor: pointer;
+            outline: none;
+            color: #00ff99;
+            position: relative;
+        }
+        
+        summary::marker {
+            display: none;
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+        
+        summary::before {
+            content: '+';
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
             font-size: 1.5em;
+            color: #00ff99;
         }
+
+        details[open] summary::before {
+            content: '-';
+        }
+
+        .content {
+            padding: 0 20px 20px 50px;
+            border-top: 1px solid #444;
+        }
+
+        .content p {
+            margin-top: 10px;
+        }
+        
+        code {
+            background-color: #1a1a1a;
+            color: #ff4d4d;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .highlight {
+            color: #00ff99;
+            font-weight: bold;
+        }
+        
+        .warning {
+            color: #ffcc00;
+        }
+
     </style>
 </head>
 <body>
+
     <div class="container">
-        <h1>HACKED</h1>
-        <p>ARP Zehirlenmesi Saldırısı Başarılı!</p>
-        <p>Tüm HTTP trafiğiniz izleniyor.</p>
+        <div class="header">
+            <h1>DİKKAT!</h1>
+            <p>Bu ağda bir ARP Zehirlenmesi (ARP Poisoning) saldırısı simüle edilmektedir.</p>
+        </div>
+
+        <details>
+            <summary>Şu An Ne Oluyor?</summary>
+            <div class="content">
+                <p>
+                    Şu anda, ağdaki <span class="highlight">tüm HTTP trafiğiniz</span> bu sayfayı size sunan bilgisayar üzerinden geçiyor. Normalde doğrudan internete çıkmanız gerekirken, saldırgan bilgisayar (bu sunucu) sizinle ağ geçidi (modem/router) arasına girmiş durumda.
+                </p>
+                <p>
+                    Bu, "Ortadaki Adam" (Man-in-the-Middle) saldırısının bir sonucudur. Ziyaret ettiğiniz şifresiz (HTTP) siteleri ve bu sitelerle paylaştığınız veriler saldırgan tarafından görülebilir.
+                </p>
+            </div>
+        </details>
+
+        <details>
+            <summary>ARP Nedir?</summary>
+            <div class="content">
+                <p>
+                    <span class="highlight">ARP (Address Resolution Protocol)</span>, yerel bir ağdaki cihazların birbirleriyle iletişim kurmasını sağlayan temel bir protokoldür. 
+                </p>
+                <p>
+                    Bir bilgisayar, başka bir bilgisayara IP adresi üzerinden veri göndermek istediğinde, aslında veriyi fiziksel olarak gönderebilmek için o IP adresine karşılık gelen <span class="highlight">MAC (fiziksel) adresini</span> bilmesi gerekir. ARP, "Bu IP adresine sahip cihazın MAC adresi nedir?" sorusunu ağa sorar ve doğru cihazdan yanıt alır.
+                </p>
+            </div>
+        </details>
+
+        <details>
+            <summary>ARP Zehirlenmesi (Poisoning) Nedir?</summary>
+            <div class="content">
+                <p>
+                    ARP protokolü, güvene dayalı çalışır. Yani, bir cihazdan gelen ARP yanıtının <span class="warning">doğruluğunu sorgulamaz</span>. ARP Zehirlenmesi, bu zafiyeti sömüren bir saldırı türüdür.
+                </p>
+                <p>
+                    Saldırgan, ağdaki diğer cihazlara sürekli olarak <span class="highlight">sahte ARP yanıtları</span> gönderir. Örneğin:
+                </p>
+                <ul>
+                    <li>Hedef bilgisayara: "Gateway'in (modemin) MAC adresi benim."</li>
+                    <li>Gateway'e (modeme): "Hedef bilgisayarın MAC adresi benim."</li>
+                </ul>
+                <p>
+                    Bu sahte bilgilerle hem hedefin hem de modemin ARP tablolarını "zehirler". Sonuç olarak, hedef ve modem arasındaki tüm trafik, ortada duran saldırganın bilgisayarı üzerinden akmaya başlar.
+                </p>
+            </div>
+        </details>
+        
+        <details>
+            <summary>Bu Simülasyon Nasıl Çalışıyor?</summary>
+            <div class="content">
+                <p>Bu saldırı 4 adımda gerçekleştirildi:</p>
+                <ol>
+                    <li>
+                        <span class="highlight">IP Yönlendirme (IP Forwarding) Aktif Edildi:</span> Saldırgan bilgisayarın, üzerinden geçen trafiği internete iletebilmesi için bu ayar açıldı. <code>echo 1 > /proc/sys/net/ipv4/ip_forward</code>
+                    </li>
+                    <li>
+                        <span class="highlight">Yerel Web Sunucusu Başlatıldı:</span> Şu an gördüğünüz bu HTML sayfasını sunmak için saldırganın bilgisayarında 8080 portunda bir web sunucusu çalıştırıldı. <code>python -m http.server 8080</code>
+                    </li>
+                    <li>
+                        <span class="highlight">Port Yönlendirme (iptables):</span> Kurbanın bir web sitesine (port 80) gitmeye çalıştığı tüm istekler, saldırganın bilgisayarındaki web sunucusuna (port 8080) yönlendirildi. <code>iptables -t nat -A PREROUTING ...</code>
+                    </li>
+                    <li>
+                        <span class="highlight">ARP Zehirlenmesi Başlatıldı:</span> <code>arpspoof</code> aracı kullanılarak ağa sürekli sahte ARP yanıtları gönderilmeye başlandı ve trafik saldırganın üzerine çekildi.
+                    </li>
+                </ol>
+            </div>
+        </details>
+
+        <details>
+            <summary>Kendimizi Nasıl Koruruz?</summary>
+            <div class="content">
+                <p>
+                    ARP zehirlenmesi saldırılarına karşı korunmak için birkaç yöntem vardır:
+                </p>
+                <ul>
+                    <li><span class="highlight">Statik ARP Tabloları:</span> Cihazlara ve modeme, hangi IP adresinin hangi MAC adresine ait olduğunu manuel olarak girmek. Bu, sahte ARP yanıtlarının tabloyu değiştirmesini engeller ama yönetimi zordur.</li>
+                    <li><span class="highlight">Saldırı Tespit Sistemleri (IDS):</span> "Arpwatch" gibi araçlar, ağdaki anormal ARP aktivitelerini (bir MAC adresinin sürekli IP değiştirmesi gibi) tespit edip uyarı verebilir.</li>
+                    <li><span class="highlight">HTTPS Kullanımı:</span> En etkili yöntemlerden biridir. Web siteleriyle iletişimde <span class="highlight">HTTPS (şifreli)</span> kullanmak, ortadaki adam trafiği ele geçirse bile içeriğini okumasını engeller. Bu yüzden bankacılık gibi hassas işlemlerde sitenin mutlaka HTTPS olduğundan emin olun.</li>
+                </ul>
+            </div>
+        </details>
+
     </div>
+
 </body>
 </html>

